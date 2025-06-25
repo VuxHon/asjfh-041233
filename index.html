@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONTENT SIU CẤP VIPPRO CHO CEO NỌC NỌC</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            transition: opacity 2s ease-out;
+        }
+        .content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            color: #ff4d4d;
+            text-align: center;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 2s ease-in;
+        }
+        .heart {
+            font-size: 100px;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .wishes {
+            margin-top: 20px;
+            font-size: 24px;
+            color: #f0f0f0;
+        }
+        .wish {
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix-canvas"></canvas>
+    <div class="content" id="content">
+        <div class="heart">❤️</div>
+        <div class="wishes">
+            <p class="wish">HẾ LU NỌC HÌNH</p>
+            <p class="wish">Chúc người đẹp luis vuituoi.</p>
+            <p class="wish">Có content siu cấp vippro cho cổ.</p>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('matrix-canvas');
+        const context = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const katakana = 'Nọc Hình cô nương siu cấp cute nhất quả đất lun';
+        const alphabet = katakana;
+        const fontSize = 16;
+        const columns = Math.floor(canvas.width / fontSize);
+
+        const drops = [];
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+
+        let matrixInterval;
+
+        function draw() {
+            context.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            context.fillStyle = '#f0f0f0';
+            context.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                context.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        function startMatrix() {
+            matrixInterval = setInterval(draw, 33);
+        }
+
+        function showWishes() {
+            const content = document.getElementById('content');
+            
+            // Fade out canvas
+            canvas.style.opacity = 0;
+
+            // Stop the matrix rain after the fade out transition
+            setTimeout(() => {
+                clearInterval(matrixInterval);
+            }, 2000);
+
+            // Fade in content
+            content.style.display = 'flex';
+            setTimeout(() => {
+                content.style.opacity = 1;
+            }, 500); // Start fading in content after a short delay
+
+            const wishes = document.querySelectorAll('.wish');
+            let delay = 1500;
+            wishes.forEach((wish, index) => {
+                setTimeout(() => {
+                    wish.style.opacity = 1;
+                }, delay * (index + 1));
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Note: resizing doesn't re-calculate columns for simplicity
+        });
+
+        startMatrix();
+
+        // Show wishes after 10 seconds
+        setTimeout(showWishes, 10000);
+    </script>
+</body>
+</html>
