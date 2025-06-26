@@ -69,25 +69,25 @@
         }
         #pinkboard {
             position: absolute;
-            width: 100%;
-            height: 100%;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
             z-index: 2;
             display: none;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            /* Animation will handle the scaling. The particles are already centered by JS. */
             animation: heart-anim 1.5s ease infinite;
         }
         
         @keyframes heart-anim {
             0% {
-                transform: translate(-50%, -50%) scale(1);
+                transform: scale(0.7);
             }
             30% {
-                transform: translate(-50%, -50%) scale(.8);
+                transform: scale(0.56);
             }
             100% {
-                transform: translate(-50%, -50%) scale(1);
+                transform: scale(0.7);
             }
         }
     </style>
@@ -114,19 +114,13 @@
         const particleTextColor = '#ff5cde';     // <-- Dễ dàng chỉnh sửa màu của chữ tại đây
         const matrixTextColor = '#aba6aa';       // <-- Dễ dàng chỉnh sửa màu của ma trận tại đây
 
-        // --- Global State for Animation and Responsiveness ---
-        let allTimers = [];
-        //let matrixInterval;
-        let textAnimationRequest;
-        let columns;
-        let drops = [];
-        const fontSize = 16;
-        let textParticles = [];
-
         const canvas = document.getElementById('matrix-canvas');
         const context = canvas.getContext('2d');
         const textCanvas = document.getElementById('text-particle-canvas');
         const textCtx = textCanvas.getContext('2d');
+
+        let resizeTimeout;
+        let currentTextIndex = -1;
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -135,6 +129,13 @@
 
         const katakana = 'Nọc Hình cô nương siu cấp cute nhất quả đất lun';
         const alphabet = katakana;
+        const fontSize = 16;
+        const columns = Math.floor(canvas.width / fontSize);
+
+        const drops = [];
+        for (let x = 0; x < columns; x++) {
+            drops[x] = 1 - Math.floor(Math.random() * 100);
+        }
 
         let matrixInterval;
         let isHeartVisible = false;
@@ -211,7 +212,7 @@
             this.radius = 0.5; // Smaller pixels for finer detail
             // Gentler physics for smoother, more deliberate movement
             this.friction = 0.85; // Higher friction to prevent overshooting and ensure a slow stop
-            this.ease = 0.01;     // A much lower ease for a very gentle, slow pull
+            this.ease = 0.02;     // A much lower ease for a very gentle, slow pull
         }
 
         TextParticle.prototype.update = function() {
@@ -243,6 +244,9 @@
             context.fillRect(Math.round(this.x), Math.round(this.y), 1, 1);
         };
 
+        let textParticles = [];
+        let textAnimationRequest;
+
         function runTextAnimation() {
             textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
             for (let i = 0; i < textParticles.length; i++) {
@@ -254,18 +258,47 @@
 
         function updateTextTargets(text, isFirstRun = false) {
             textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
-            const fontSize = Math.min(textCanvas.width / 10, 70);
+            
+            // The font size is still responsive, but the wrapping will handle very long texts gracefully.
+            const fontSize = Math.min(textCanvas.width / 8, 90);
             textCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+            textCtx.fillStyle = particleTextColor;
             textCtx.textAlign = 'center';
             textCtx.textBaseline = 'middle';
-            textCtx.fillStyle = '#f0f0f0';
-            textCtx.fillText(text, textCanvas.width / 2, textCanvas.height / 2);
+
+            // --- Word Wrapping Logic ---
+            const maxWidth = textCanvas.width * 0.9; // Use 90% of canvas width
+            const words = text.split(' ');
+            let lines = [];
+            let currentLine = words[0] || '';
+
+            if (words.length > 1) {
+                for (let i = 1; i < words.length; i++) {
+                    const testLine = currentLine + ' ' + words[i];
+                    if (textCtx.measureText(testLine).width > maxWidth && i > 0) {
+                        lines.push(currentLine);
+                        currentLine = words[i];
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+            }
+            lines.push(currentLine);
+
+            // --- Centered Multi-line Drawing Logic ---
+            const lineHeight = fontSize * 1.1; // Adjust line height for multi-line text
+            const textBlockHeight = (lines.length - 1) * lineHeight;
+            const startY = (textCanvas.height / 2) - (textBlockHeight / 2);
+
+            for(let i = 0; i < lines.length; i++) {
+                textCtx.fillText(lines[i], textCanvas.width / 2, startY + (i * lineHeight));
+            }
             
             const imageData = textCtx.getImageData(0, 0, textCanvas.width, textCanvas.height);
             textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
             const newTargets = [];
-            const sampling = 2; // Denser sampling for more pixels
+            const sampling = 2; // Smaller value = more particles = denser text
             for (let y = 0; y < imageData.height; y += sampling) {
                 for (let x = 0; x < imageData.width; x += sampling) {
                     const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
@@ -312,32 +345,30 @@
             let totalDuration = 0;
 
             timedTextConfig.forEach(({ text, duration }, index) => {
-                const textTimeout = setTimeout(() => {
+                setTimeout(() => {
+                    currentTextIndex = index;
                     updateTextTargets(text, index === 0);
                 }, cumulativeTime);
-                allTimers.push(textTimeout);
                 cumulativeTime += duration;
             });
             
             totalDuration = cumulativeTime;
 
             // After the last text, make all particles disperse
-            const dispersalTimeout = setTimeout(() => {
+            setTimeout(() => {
                 for (const p of textParticles) {
                     p.targetY = textCanvas.height + 20; // Send them to the bottom
                 }
             }, totalDuration);
-            allTimers.push(dispersalTimeout);
 
             // Stop rendering a bit after the final dispersion
-            const stopTimeout = setTimeout(() => {
+            setTimeout(() => {
                 if (textAnimationRequest) {
                     cancelAnimationFrame(textAnimationRequest);
                     textAnimationRequest = null;
                     textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
                 }
             }, totalDuration + 2000);
-            allTimers.push(stopTimeout);
 
             return totalDuration;
         }
@@ -369,58 +400,28 @@
             });
         }
 
-        // --- Initialization and Resize Handling ---
-
-        function debounce(func, delay) {
-            let timeout;
-            return function(...args) {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), delay);
-            };
-        }
-
-        function initialize() {
-            // 1. Clear all previous timers and intervals to prevent duplicates
-            allTimers.forEach(clearTimeout);
-            allTimers = [];
-            if (matrixInterval) clearInterval(matrixInterval);
-            if (textAnimationRequest) {
-                cancelAnimationFrame(textAnimationRequest);
-                textAnimationRequest = null;
-            }
-            textParticles = [];
-
-            // Hide content that will be shown later
-            const content = document.getElementById('content');
-            content.style.opacity = 0;
-            content.style.display = 'none';
-            document.getElementById('pinkboard').style.display = 'none';
-
-
-            // 2. Set canvas sizes
+        window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             textCanvas.width = window.innerWidth;
             textCanvas.height = window.innerHeight;
+            
+            // Debounced resize handler for responsive text
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (currentTextIndex > -1 && currentTextIndex < timedTextConfig.length) {
+                    const currentText = timedTextConfig[currentTextIndex].text;
+                    // The isFirstRun should be false because we are not starting from scratch
+                    updateTextTargets(currentText, false);
+                }
+            }, 250);
+        });
 
-            // 3. Setup Matrix
-            columns = Math.floor(canvas.width / fontSize);
-            drops = [];
-            for (let x = 0; x < columns; x++) {
-                drops[x] = 1 - Math.floor(Math.random() * 100);
-            }
-            startMatrix();
+        startMatrix();
+        const timeUntilHeart = runTimedTexts();
 
-            // 4. Run animations
-            const timeUntilHeart = runTimedTexts();
-            const heartTimeout = setTimeout(showWishes, timeUntilHeart);
-            allTimers.push(heartTimeout);
-        }
-
-        window.addEventListener('resize', debounce(initialize, 250));
-        
-        // First run
-        initialize();
+        // Show wishes after timed texts finish
+        setTimeout(showWishes, timeUntilHeart);
     </script>
     <script>
         function startHeartAnimation() {
@@ -604,9 +605,10 @@
 
                 // get point on heart with -PI <= t <= PI
                 function pointOnHeart(t) {
+                    // Scaled down to 70% of original size
                     return new Point(
-                        160 * Math.pow(Math.sin(t), 3),
-                        130 * Math.cos(t) - 50 * Math.cos(2 * t) - 20 * Math.cos(3 * t) - 10 * Math.cos(4 * t) + 25
+                        112 * Math.pow(Math.sin(t), 3),
+                        91 * Math.cos(t) - 35 * Math.cos(2 * t) - 14 * Math.cos(3 * t) - 7 * Math.cos(4 * t) + 25
                     );
                 }
 
@@ -619,8 +621,9 @@
                     // helper function to create the path
                     function to(t) {
                         var point = pointOnHeart(t);
-                        point.x = settings.particles.size / 3 + point.x * settings.particles.size / 550;
-                        point.y = settings.particles.size / 3 - point.y * settings.particles.size / 550;
+                        // Scaled down denominator to match heart size reduction
+                        point.x = settings.particles.size / 3 + point.x * settings.particles.size / 385;
+                        point.y = settings.particles.size / 3 - point.y * settings.particles.size / 385;
                         return point;
                     }
                     // create the path
