@@ -13,7 +13,7 @@
             background: #000;
             font-family: 'Courier New', Courier, monospace;
         }
-        canvas {
+        #matrix-canvas {
             display: block;
             position: absolute;
             top: 0;
@@ -26,8 +26,8 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            z-index: 2;
-            color: #ff4d4d;
+            z-index: 3;
+            color: #f0f0f0;
             text-align: center;
             display: none;
             flex-direction: column;
@@ -53,12 +53,50 @@
             opacity: 0;
             transition: opacity 1s ease-in-out;
         }
+        #text-particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 4;
+            pointer-events: none; /* Make it non-interactive */
+            /* Force nearest-neighbor rendering to prevent anti-aliasing and color dimming */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        #pinkboard {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: none;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: heart-anim 1.5s ease infinite;
+        }
+        
+        @keyframes heart-anim {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+            30% {
+                transform: translate(-50%, -50%) scale(.8);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
     </style>
 </head>
 <body>
     <canvas id="matrix-canvas"></canvas>
+    <canvas id="pinkboard"></canvas>
+    <canvas id="text-particle-canvas"></canvas>
     <div class="content" id="content">
-        <div class="heart">❤️</div>
         <div class="wishes">
             <p class="wish">HẾ LU NỌC HÌNH</p>
             <p class="wish">Chúc người đẹp luis vuituoi.</p>
@@ -66,40 +104,242 @@
         </div>
     </div>
     <script>
+        const timedTextConfig = [
+            { text: "Chào cô nương", duration: 3000 },
+            { text: "Tôi có một vài điều muốn nói...", duration: 3000 },
+            { text: "Xem nè...", duration: 3000 }
+            // Thêm các dòng chữ và thời gian hiển thị (mili giây) tại đây
+        ];
+
+        const particleTextColor = '#ff5cde';     // <-- Dễ dàng chỉnh sửa màu của chữ tại đây
+        const matrixTextColor = '#aba6aa';       // <-- Dễ dàng chỉnh sửa màu của ma trận tại đây
+
+        // --- Global State for Animation and Responsiveness ---
+        let allTimers = [];
+        //let matrixInterval;
+        let textAnimationRequest;
+        let columns;
+        let drops = [];
+        const fontSize = 16;
+        let textParticles = [];
+
         const canvas = document.getElementById('matrix-canvas');
         const context = canvas.getContext('2d');
+        const textCanvas = document.getElementById('text-particle-canvas');
+        const textCtx = textCanvas.getContext('2d');
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        textCanvas.width = window.innerWidth;
+        textCanvas.height = window.innerHeight;
 
         const katakana = 'Nọc Hình cô nương siu cấp cute nhất quả đất lun';
         const alphabet = katakana;
-        const fontSize = 16;
-        const columns = Math.floor(canvas.width / fontSize);
-
-        const drops = [];
-        for (let x = 0; x < columns; x++) {
-            drops[x] = 1;
-        }
 
         let matrixInterval;
+        let isHeartVisible = false;
+
+        function drawHeartPathForClipping(ctx) {
+            const canvasCenterX = ctx.canvas.width / 2;
+            const canvasCenterY = ctx.canvas.height / 2;
+            ctx.beginPath();
+            const step = 0.01;
+            
+            let t = -Math.PI;
+            let point = pointOnHeart(t);
+            ctx.moveTo(canvasCenterX + point.x, canvasCenterY - point.y);
+
+            while (t < Math.PI) {
+                t += step;
+                point = pointOnHeart(t);
+                ctx.lineTo(canvasCenterX + point.x, canvasCenterY - point.y);
+            }
+            ctx.closePath();
+        }
 
         function draw() {
             context.fillStyle = 'rgba(0, 0, 0, 0.05)';
             context.fillRect(0, 0, canvas.width, canvas.height);
 
-            context.fillStyle = '#f0f0f0';
             context.font = fontSize + 'px monospace';
 
-            for (let i = 0; i < drops.length; i++) {
+            if (isHeartVisible) {
+                drawHeartPathForClipping(context);
+            }
+            
+            const heartColor = '#000000';
+
+            for (let i = 0; i < columns; i++) {
                 const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-                context.fillText(text, i * fontSize, drops[i] * fontSize);
+                const xPos = i * fontSize;
+                const yPos = drops[i] * fontSize;
+
+                if (isHeartVisible && context.isPointInPath(xPos, yPos)) {
+                    context.fillStyle = heartColor;
+                } else {
+                    context.fillStyle = matrixTextColor;
+                }
+                
+                context.fillText(text, xPos, yPos);
 
                 if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
+                    drops[i] = 1 - Math.floor(Math.random() * 100);
                 }
                 drops[i]++;
             }
+        }
+
+        // --- Text Particle Animation ---
+
+        function TextParticle(targetX, targetY, color, isFirstRun) {
+            this.targetX = targetX;
+            this.targetY = targetY;
+
+            // For the very first text, have them appear from random positions
+            if (isFirstRun) {
+                this.x = Math.random() * textCanvas.width;
+                this.y = Math.random() * textCanvas.height;
+            } else {
+                // For new particles on subsequent texts, have them emerge from the center
+                this.x = textCanvas.width / 2;
+                this.y = textCanvas.height / 2;
+            }
+            
+            this.vx = 0;
+            this.vy = 0;
+            this.color = color;
+            this.radius = 0.5; // Smaller pixels for finer detail
+            // Gentler physics for smoother, more deliberate movement
+            this.friction = 0.85; // Higher friction to prevent overshooting and ensure a slow stop
+            this.ease = 0.01;     // A much lower ease for a very gentle, slow pull
+        }
+
+        TextParticle.prototype.update = function() {
+            let dx = this.targetX - this.x;
+            let dy = this.targetY - this.y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Snap into place if very close, to prevent all jittering
+            if (distance < 0.1) {
+                this.x = this.targetX;
+                this.y = this.targetY;
+                this.vx = 0;
+                this.vy = 0;
+                return; // Stop further physics calculations for this frame
+            }
+
+            this.vx += dx * this.ease;
+            this.vy += dy * this.ease;
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+            this.x += this.vx;
+            this.y += this.vy;
+        };
+
+        TextParticle.prototype.draw = function(context) {
+            context.fillStyle = this.color;
+            // By rounding the coordinates, we ensure the 1x1 rectangle is drawn on a
+            // crisp pixel boundary, avoiding sub-pixel rendering and anti-aliasing that can dim the color.
+            context.fillRect(Math.round(this.x), Math.round(this.y), 1, 1);
+        };
+
+        function runTextAnimation() {
+            textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+            for (let i = 0; i < textParticles.length; i++) {
+                textParticles[i].update();
+                textParticles[i].draw(textCtx);
+            }
+            textAnimationRequest = requestAnimationFrame(runTextAnimation);
+        }
+
+        function updateTextTargets(text, isFirstRun = false) {
+            textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+            const fontSize = Math.min(textCanvas.width / 10, 70);
+            textCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+            textCtx.textAlign = 'center';
+            textCtx.textBaseline = 'middle';
+            textCtx.fillStyle = '#f0f0f0';
+            textCtx.fillText(text, textCanvas.width / 2, textCanvas.height / 2);
+            
+            const imageData = textCtx.getImageData(0, 0, textCanvas.width, textCanvas.height);
+            textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+
+            const newTargets = [];
+            const sampling = 2; // Denser sampling for more pixels
+            for (let y = 0; y < imageData.height; y += sampling) {
+                for (let x = 0; x < imageData.width; x += sampling) {
+                    const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
+                    if (alpha > 128) {
+                        // Use the config color for the text particles
+                        newTargets.push({ x: x, y: y, color: particleTextColor });
+                    }
+                }
+            }
+            
+            // Shuffle targets for a more dynamic morphing effect
+            for (let i = newTargets.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newTargets[i], newTargets[j]] = [newTargets[j], newTargets[i]];
+            }
+
+            const numParticles = Math.max(textParticles.length, newTargets.length);
+            for (let i = 0; i < numParticles; i++) {
+                const target = newTargets[i];
+                let p = textParticles[i];
+
+                if (target) { // If a target exists for this particle
+                    if (p) { // Particle exists, retarget it
+                        p.targetX = target.x;
+                        p.targetY = target.y;
+                    } else { // No particle exists, create a new one
+                        p = new TextParticle(target.x, target.y, target.color, isFirstRun);
+                        textParticles.push(p);
+                    }
+                } else { // No target for this particle (new text is shorter)
+                    // Make it fly off-screen
+                    p.targetY = textCanvas.height + 20;
+                }
+            }
+        }
+
+        function runTimedTexts() {
+            if (textAnimationRequest) {
+                cancelAnimationFrame(textAnimationRequest);
+            }
+            runTextAnimation(); // Start the animation loop
+
+            let cumulativeTime = 500;
+            let totalDuration = 0;
+
+            timedTextConfig.forEach(({ text, duration }, index) => {
+                const textTimeout = setTimeout(() => {
+                    updateTextTargets(text, index === 0);
+                }, cumulativeTime);
+                allTimers.push(textTimeout);
+                cumulativeTime += duration;
+            });
+            
+            totalDuration = cumulativeTime;
+
+            // After the last text, make all particles disperse
+            const dispersalTimeout = setTimeout(() => {
+                for (const p of textParticles) {
+                    p.targetY = textCanvas.height + 20; // Send them to the bottom
+                }
+            }, totalDuration);
+            allTimers.push(dispersalTimeout);
+
+            // Stop rendering a bit after the final dispersion
+            const stopTimeout = setTimeout(() => {
+                if (textAnimationRequest) {
+                    cancelAnimationFrame(textAnimationRequest);
+                    textAnimationRequest = null;
+                    textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+                }
+            }, totalDuration + 2000);
+            allTimers.push(stopTimeout);
+
+            return totalDuration;
         }
 
         function startMatrix() {
@@ -108,14 +348,11 @@
 
         function showWishes() {
             const content = document.getElementById('content');
+            const pinkboard = document.getElementById('pinkboard');
             
-            // Fade out canvas
-            canvas.style.opacity = 0;
-
-            // Stop the matrix rain after the fade out transition
-            setTimeout(() => {
-                clearInterval(matrixInterval);
-            }, 2000);
+            isHeartVisible = true;
+            pinkboard.style.display = 'block';
+            startHeartAnimation();
 
             // Fade in content
             content.style.display = 'flex';
@@ -132,16 +369,320 @@
             });
         }
 
-        window.addEventListener('resize', () => {
+        // --- Initialization and Resize Handling ---
+
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+
+        function initialize() {
+            // 1. Clear all previous timers and intervals to prevent duplicates
+            allTimers.forEach(clearTimeout);
+            allTimers = [];
+            if (matrixInterval) clearInterval(matrixInterval);
+            if (textAnimationRequest) {
+                cancelAnimationFrame(textAnimationRequest);
+                textAnimationRequest = null;
+            }
+            textParticles = [];
+
+            // Hide content that will be shown later
+            const content = document.getElementById('content');
+            content.style.opacity = 0;
+            content.style.display = 'none';
+            document.getElementById('pinkboard').style.display = 'none';
+
+
+            // 2. Set canvas sizes
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            // Note: resizing doesn't re-calculate columns for simplicity
-        });
+            textCanvas.width = window.innerWidth;
+            textCanvas.height = window.innerHeight;
 
-        startMatrix();
+            // 3. Setup Matrix
+            columns = Math.floor(canvas.width / fontSize);
+            drops = [];
+            for (let x = 0; x < columns; x++) {
+                drops[x] = 1 - Math.floor(Math.random() * 100);
+            }
+            startMatrix();
 
-        // Show wishes after 10 seconds
-        setTimeout(showWishes, 10000);
+            // 4. Run animations
+            const timeUntilHeart = runTimedTexts();
+            const heartTimeout = setTimeout(showWishes, timeUntilHeart);
+            allTimers.push(heartTimeout);
+        }
+
+        window.addEventListener('resize', debounce(initialize, 250));
+        
+        // First run
+        initialize();
+    </script>
+    <script>
+        function startHeartAnimation() {
+            /*
+            * Settings
+            */
+            var settings = {
+                particles: {
+                    length: 1500, // maximum amount of particles
+                    duration: 2, // particle duration in sec
+                    velocity: 135, // particle velocity in pixels/sec
+                    effect: -0.35, // play with this for a nice effect
+                    size: 14, // particle size in pixels
+                },
+            };
+
+            /*
+            * RequestAnimationFrame polyfill by Erik Möller
+            */
+            (function() {
+                var b = 0;
+                var c = ["ms", "moz", "webkit", "o"];
+                for (var a = 0; a < c.length && !window.requestAnimationFrame; ++a) {
+                    window.requestAnimationFrame = window[c[a] + "RequestAnimationFrame"];
+                    window.cancelAnimationFrame = window[c[a] + "CancelAnimationFrame"] || window[c[a] + "CancelRequestAnimationFrame"]
+                }
+                if (!window.requestAnimationFrame) {
+                    window.requestAnimationFrame = function(h, e) {
+                        var d = new Date().getTime();
+                        var f = Math.max(0, 16 - (d - b));
+                        var g = window.setTimeout(function() {
+                            h(d + f)
+                        }, f);
+                        b = d + f;
+                        return g
+                    }
+                }
+                if (!window.cancelAnimationFrame) {
+                    window.cancelAnimationFrame = function(d) {
+                        clearTimeout(d)
+                    }
+                }
+            }());
+
+            /*
+            * Point class
+            */
+            var Point = (function() {
+                function Point(x, y) {
+                    this.x = (typeof x !== 'undefined') ? x : 0;
+                    this.y = (typeof y !== 'undefined') ? y : 0;
+                }
+                Point.prototype.clone = function() {
+                    return new Point(this.x, this.y);
+                };
+                Point.prototype.length = function(length) {
+                    if (typeof length == 'undefined')
+                        return Math.sqrt(this.x * this.x + this.y * this.y);
+                    this.normalize();
+                    this.x *= length;
+                    this.y *= length;
+                    return this;
+                };
+                Point.prototype.normalize = function() {
+                    var length = this.length();
+                    this.x /= length;
+                    this.y /= length;
+                    return this;
+                };
+                return Point;
+            })();
+
+            /*
+            * Particle class
+            */
+            var Particle = (function() {
+                function Particle() {
+                    this.position = new Point();
+                    this.velocity = new Point();
+                    this.acceleration = new Point();
+                    this.age = 0;
+                }
+                Particle.prototype.initialize = function(x, y, dx, dy) {
+                    this.position.x = x;
+                    this.position.y = y;
+                    this.velocity.x = dx;
+                    this.velocity.y = dy;
+                    this.acceleration.x = dx * settings.particles.effect;
+                    this.acceleration.y = dy * settings.particles.effect;
+                    this.age = 0;
+                };
+                Particle.prototype.update = function(deltaTime) {
+                    this.position.x += this.velocity.x * deltaTime;
+                    this.position.y += this.velocity.y * deltaTime;
+                    this.velocity.x += this.acceleration.x * deltaTime;
+                    this.velocity.y += this.acceleration.y * deltaTime;
+                    this.age += deltaTime;
+                };
+                Particle.prototype.draw = function(context, image) {
+                    function ease(t) {
+                        return (--t) * t * t + 1;
+                    }
+                    var size = image.width * ease(this.age / settings.particles.duration);
+                    context.globalAlpha = 1 - this.age / settings.particles.duration;
+                    context.drawImage(image, this.position.x - size / 2, this.position.y - size / 2, size, size);
+                };
+                return Particle;
+            })();
+
+            /*
+            * ParticlePool class
+            */
+            var ParticlePool = (function() {
+                var particles,
+                    firstActive = 0,
+                    firstFree = 0,
+                    duration = settings.particles.duration;
+
+                function ParticlePool(length) {
+                    // create and populate particle pool
+                    particles = new Array(length);
+                    for (var i = 0; i < particles.length; i++)
+                        particles[i] = new Particle();
+                }
+                ParticlePool.prototype.add = function(x, y, dx, dy) {
+                    particles[firstFree].initialize(x, y, dx, dy);
+
+                    // handle circular queue
+                    firstFree++;
+                    if (firstFree == particles.length) firstFree = 0;
+                    if (firstActive == firstFree) firstActive++;
+                    if (firstActive == particles.length) firstActive = 0;
+                };
+                ParticlePool.prototype.update = function(deltaTime) {
+                    var i;
+
+                    // update active particles
+                    if (firstActive < firstFree) {
+                        for (i = firstActive; i < firstFree; i++)
+                            particles[i].update(deltaTime);
+                    }
+                    if (firstFree < firstActive) {
+                        for (i = firstActive; i < particles.length; i++)
+                            particles[i].update(deltaTime);
+                        for (i = 0; i < firstFree; i++)
+                            particles[i].update(deltaTime);
+                    }
+
+                    // remove inactive particles
+                    while (particles[firstActive].age >= duration && firstActive != firstFree) {
+                        firstActive++;
+                        if (firstActive == particles.length) firstActive = 0;
+                    }
+
+
+                };
+                ParticlePool.prototype.draw = function(context, image) {
+                    // draw active particles
+                    if (firstActive < firstFree) {
+                        for (i = firstActive; i < firstFree; i++)
+                            particles[i].draw(context, image);
+                    }
+                    if (firstFree < firstActive) {
+                        for (i = firstActive; i < particles.length; i++)
+                            particles[i].draw(context, image);
+                        for (i = 0; i < firstFree; i++)
+                            particles[i].draw(context, image);
+                    }
+                };
+                return ParticlePool;
+            })();
+
+            /*
+            * Putting it all together
+            */
+            (function(canvas) {
+                var context = canvas.getContext('2d'),
+                    particles = new ParticlePool(settings.particles.length),
+                    particleRate = settings.particles.length / settings.particles.duration, // particles/sec
+                    time;
+
+                // get point on heart with -PI <= t <= PI
+                function pointOnHeart(t) {
+                    return new Point(
+                        160 * Math.pow(Math.sin(t), 3),
+                        130 * Math.cos(t) - 50 * Math.cos(2 * t) - 20 * Math.cos(3 * t) - 10 * Math.cos(4 * t) + 25
+                    );
+                }
+
+                // creating the particle image using a dummy canvas
+                var image = (function() {
+                    var canvas = document.createElement('canvas'),
+                        context = canvas.getContext('2d');
+                    canvas.width = settings.particles.size;
+                    canvas.height = settings.particles.size;
+                    // helper function to create the path
+                    function to(t) {
+                        var point = pointOnHeart(t);
+                        point.x = settings.particles.size / 3 + point.x * settings.particles.size / 550;
+                        point.y = settings.particles.size / 3 - point.y * settings.particles.size / 550;
+                        return point;
+                    }
+                    // create the path
+                    context.beginPath();
+                    var t = -Math.PI;
+                    var point = to(t);
+                    context.moveTo(point.x, point.y);
+                    while (t < Math.PI) {
+                        t += 0.01; // baby steps!
+                        point = to(t);
+                        context.lineTo(point.x, point.y);
+                    }
+                    context.closePath();
+                    // create the fill
+                    context.fillStyle = '#ea80b0';
+                    context.fill();
+                    // create the image
+                    var image = new Image();
+                    image.src = canvas.toDataURL();
+                    return image;
+                })();
+
+                // render that thing!
+                function render() {
+                    // next animation frame
+                    requestAnimationFrame(render);
+
+                    // update time
+                    var newTime = new Date().getTime() / 1000,
+                        deltaTime = newTime - (time || newTime);
+                    time = newTime;
+
+                    // clear canvas
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // create new particles
+                    var amount = particleRate * deltaTime;
+                    for (var i = 0; i < amount; i++) {
+                        var pos = pointOnHeart(Math.PI - 2 * Math.PI * Math.random());
+                        var dir = pos.clone().length(settings.particles.velocity);
+                        particles.add(canvas.width / 2 + pos.x, canvas.height / 2 - pos.y, dir.x, -dir.y);
+                    }
+
+                    // update and draw particles
+                    particles.update(deltaTime);
+                    particles.draw(context, image);
+                }
+
+                // handle (re-)sizing of the canvas
+                function onResize() {
+                    canvas.width = canvas.clientWidth;
+                    canvas.height = canvas.clientHeight;
+                }
+                window.addEventListener('resize', onResize);
+
+                // delay rendering bootstrap
+                setTimeout(function() {
+                    onResize();
+                    render();
+                }, 10);
+            })(document.getElementById('pinkboard'));
+        }
     </script>
 </body>
 </html>
