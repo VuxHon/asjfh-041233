@@ -81,13 +81,13 @@
         
         @keyframes heart-anim {
             0% {
-                transform: scale(0.7);
+                transform: scale(var(--heart-scale, 0.7));
             }
             30% {
-                transform: scale(0.56);
+                transform: scale(var(--heart-beat-scale, 0.56));
             }
             100% {
-                transform: scale(0.7);
+                transform: scale(var(--heart-scale, 0.7));
             }
         }
     </style>
@@ -98,9 +98,9 @@
     <canvas id="text-particle-canvas"></canvas>
     <div class="content" id="content">
         <div class="wishes">
-            <p class="wish">HẾ LU NỌC HÌNH</p>
-            <p class="wish">Tuy IT này hơi lỏm nhưng tui vẫn cố gắng làm tốt nhất có thể.</p>
-            <p class="wish">Ráng xíu tui làm cho content siu cấp vippro cho nhen</p>
+            <p class="wish" style="font-size: 15px;">HẾ LU NỌC HÌNH</p>
+            <p class="wish" style="font-size: 10px;">Tuy IT này hơi lỏm nhưng tui vẫn cố gắng làm tốt nhất có thể.</p>
+            <p class="wish" style="font-size: 10px;">Ráng xíu tui làm cho content siu cấp vippro cho nhen</p>
         </div>
     </div>
     <script>
@@ -113,6 +113,15 @@
 
         const particleTextColor = '#ff5cde';     // <-- Dễ dàng chỉnh sửa màu của chữ tại đây
         const matrixTextColor = '#aba6aa';       // <-- Dễ dàng chỉnh sửa màu của ma trận tại đây
+
+        // --- GLOBAL CONFIGURATIONS ---
+        const heartGlobalScale = 0.55; // Tỉ lệ chung cho trái tim (1.0 = 100%)
+        const particleTextFontScale = 15; // Số càng nhỏ, chữ càng to so với màn hình
+        const particleTextFontMax = 40; // Kích thước chữ tối đa (px)
+
+        // Dynamically set CSS variables from JS config
+        document.documentElement.style.setProperty('--heart-scale', heartGlobalScale);
+        document.documentElement.style.setProperty('--heart-beat-scale', heartGlobalScale * 0.8);
 
         const canvas = document.getElementById('matrix-canvas');
         const context = canvas.getContext('2d');
@@ -260,7 +269,7 @@
             textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
             
             // The font size is still responsive, but the wrapping will handle very long texts gracefully.
-            const fontSize = Math.min(textCanvas.width / 8, 90);
+            const fontSize = Math.min(textCanvas.width / particleTextFontScale, particleTextFontMax);
             textCtx.font = `bold ${fontSize}px "Courier New", monospace`;
             textCtx.fillStyle = particleTextColor;
             textCtx.textAlign = 'center';
@@ -605,10 +614,11 @@
 
                 // get point on heart with -PI <= t <= PI
                 function pointOnHeart(t) {
-                    // Scaled down to 70% of original size
+                    // Base values for 100% scale
+                    const b = { x1: 160, y1: 130, y2: 50, y3: 20, y4: 10, yOffset: 25 };
                     return new Point(
-                        112 * Math.pow(Math.sin(t), 3),
-                        91 * Math.cos(t) - 35 * Math.cos(2 * t) - 14 * Math.cos(3 * t) - 7 * Math.cos(4 * t) + 25
+                        b.x1 * heartGlobalScale * Math.pow(Math.sin(t), 3),
+                        b.y1 * heartGlobalScale * Math.cos(t) - b.y2 * heartGlobalScale * Math.cos(2 * t) - b.y3 * heartGlobalScale * Math.cos(3 * t) - b.y4 * heartGlobalScale * Math.cos(4 * t) + b.yOffset
                     );
                 }
 
@@ -622,8 +632,9 @@
                     function to(t) {
                         var point = pointOnHeart(t);
                         // Scaled down denominator to match heart size reduction
-                        point.x = settings.particles.size / 3 + point.x * settings.particles.size / 385;
-                        point.y = settings.particles.size / 3 - point.y * settings.particles.size / 385;
+                        const baseDenominator = 550;
+                        point.x = settings.particles.size / 3 + point.x * settings.particles.size / (baseDenominator * heartGlobalScale);
+                        point.y = settings.particles.size / 3 - point.y * settings.particles.size / (baseDenominator * heartGlobalScale);
                         return point;
                     }
                     // create the path
