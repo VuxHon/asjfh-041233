@@ -91,6 +91,9 @@
             }
         }
     </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geologica&display=swap" rel="stylesheet">
 </head>
 <body>
     <canvas id="matrix-canvas"></canvas>
@@ -98,26 +101,28 @@
     <canvas id="text-particle-canvas"></canvas>
     <div class="content" id="content">
         <div class="wishes">
-            <p class="wish" style="font-size: 15px;">HẾ LU NỌC HÌNH</p>
-            <p class="wish" style="font-size: 12px;">Tuy IT này hơi lỏm nhưng tui vẫn cố gắng làm tốt nhất có thể.</p>
-            <p class="wish" style="font-size: 12px;">Ráng xíu tui làm cho content siu cấp vippro cho nhen</p>
+            <p class="wish" style="font-size: 15px; font-family: Geologica; ">MÃI MÃI BÊN NHAU</p>
+            <p class="wish" style="font-size: 12px; font-family: Geologica; ">ANH YÊU EM</p>
         </div>
     </div>
     <script>
         const timedTextConfig = [
-            { text: "Chào cô nương", duration: 3000 },
-            { text: "Tui có một vài điều muốn nói...", duration: 3000 },
-            { text: "Xem nè...", duration: 3000 }
+            { text: "HELLO BABY", duration: 3000 },
+            { text: "HAPPY ANIVERSARY", duration: 3000 },
+            { text: "01.07.2024", duration: 3000 },
+            { text: "ANH PHONG ❤️ THAO NGUYEN", duration: 3000 }
             // Thêm các dòng chữ và thời gian hiển thị (mili giây) tại đây
         ];
 
-        const particleTextColor = '#ff5cde';     // <-- Dễ dàng chỉnh sửa màu của chữ tại đây
-        const matrixTextColor = '#aba6aa';       // <-- Dễ dàng chỉnh sửa màu của ma trận tại đây
+        const particleTextColor = '#fabbed';    
+        const matrixTextColor = '#aba6aa';       
 
         // --- GLOBAL CONFIGURATIONS ---
-        const heartGlobalScale = 0.55; // Tỉ lệ chung cho trái tim (1.0 = 100%)
-        const particleTextFontScale = 15; // Số càng nhỏ, chữ càng to so với màn hình
+        const heartGlobalScale = 0.55;
+        const particleTextFontScale = 15; 
         const particleTextFontMax = 50; // Kích thước chữ tối đa (px)
+        const matrixFontFamily = 'monospace';
+        const particleTextFontFamily = 'Geologica';
 
         // Dynamically set CSS variables from JS config
         document.documentElement.style.setProperty('--heart-scale', heartGlobalScale);
@@ -171,7 +176,7 @@
             context.fillStyle = 'rgba(0, 0, 0, 0.05)';
             context.fillRect(0, 0, canvas.width, canvas.height);
 
-            context.font = fontSize + 'px monospace';
+            context.font = fontSize + 'px ' + matrixFontFamily;
 
             if (isHeartVisible) {
                 drawHeartPathForClipping(context);
@@ -220,8 +225,8 @@
             this.color = color;
             this.radius = 0.5; // Smaller pixels for finer detail
             // Gentler physics for smoother, more deliberate movement
-            this.friction = 0.85; // Higher friction to prevent overshooting and ensure a slow stop
-            this.ease = 0.02;     // A much lower ease for a very gentle, slow pull
+            this.friction = 0.55; // Higher friction to prevent overshooting and ensure a slow stop
+            this.ease = 0.03;     // A much lower ease for a very gentle, slow pull
         }
 
         TextParticle.prototype.update = function() {
@@ -270,7 +275,7 @@
             
             // The font size is still responsive, but the wrapping will handle very long texts gracefully.
             const fontSize = Math.min(textCanvas.width / particleTextFontScale, particleTextFontMax);
-            textCtx.font = `bold ${fontSize}px "Courier New", monospace`;
+            textCtx.font = `bold ${fontSize}px ${particleTextFontFamily}`;
             textCtx.fillStyle = particleTextColor;
             textCtx.textAlign = 'center';
             textCtx.textBaseline = 'middle';
@@ -307,7 +312,7 @@
             textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
             const newTargets = [];
-            const sampling = 2; // Smaller value = more particles = denser text
+            const sampling = 1; // 1 = max density. Smaller value = more particles.
             for (let y = 0; y < imageData.height; y += sampling) {
                 for (let x = 0; x < imageData.width; x += sampling) {
                     const alpha = imageData.data[(y * imageData.width + x) * 4 + 3];
